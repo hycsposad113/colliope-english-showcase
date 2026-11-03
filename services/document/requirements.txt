@@ -1,0 +1,2 @@
+# Extracted from a larger private codebase (CALLIOPE). Source: services/document/requirements.txt; adapted: plain-text conversion has no dependencies; Docling is optional.
+# Optional full document conversion: install docling==2.101.0 and click==8.1.8.

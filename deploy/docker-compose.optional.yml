@@ -1,0 +1,24 @@
+# Extracted from a larger private codebase (CALLIOPE). Source: infra/docker-compose.optional.yml:1-33; adapted: optional loopback-only development services; no private data.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: showcase
+      POSTGRES_USER: showcase
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a local development password}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U showcase -d showcase"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  redis:
+    image: redis:7
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

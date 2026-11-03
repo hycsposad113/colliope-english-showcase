@@ -1,0 +1,204 @@
+// Extracted from a larger private codebase (CALLIOPE). Source: apps/api/prisma/schema.prisma; adapted: selected learning, evidence and event models; unrelated relations omitted.
+// The learner-scoped foreign keys are ownership boundaries, not authorization enforcement.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Learner {
+  id                 String   @id @default(uuid())
+  name               String
+  currentLevel       String // A1, A2, B1, B2, C1, C2
+  weeklyMinutes      Int      @default(180)
+  feedbackDirectness String // direct, moderate, gentle
+  topicsEnjoy        String[]
+  topicsAvoid        String[]
+  preferences        Json     @default("{}")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  playerProfile   PlayerProfile?
+
+  @@map("learners")
+}
+
+model PlayerProfile {
+  id                      String   @id @default(uuid())
+  learnerId               String   @unique
+  learner                 Learner  @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  currentLevel            Int      @default(1)
+  totalXp                 Int      @default(0)
+  awakeningTier           String   @default("Latent")
+  title                   String   @default("The Latent Speaker")
+  primarySpecialization   String?
+  secondarySpecialization String?
+  recoverySeals           Int      @default(0)
+  timezone                String   @default("Asia/Taipei")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  skills                SkillState[]
+  dailyProtocols        DailyProtocol[]
+  sessionPacks          LiveSessionPack[]
+  externalReports       ExternalSessionReport[]
+  xpLedgerEntries       XpLedgerEntry[]
+  progressionEvents     ProgressionEvent[]
+
+  @@map("player_profiles")
+}
+
+model SkillState {
+  id              String        @id @default(uuid())
+  playerId        String
+  player          PlayerProfile @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  dimension       String // v1: voice, flow, structure, lexicon, presence, perception; v2: range, accuracy, fluency, interaction, coherence, intelligibility
+  track           String        @default("global") // academic_communication, life_abroad, or legacy global
+  rating          Float         @default(0.0)
+  confidence      Float         @default(0.0)
+  evidenceCount   Int           @default(0)
+  trend           String        @default("insufficient") // rising, stable, declining, insufficient
+  lastEvaluatedAt DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([playerId, dimension, track])
+  @@map("skill_states")
+}
+
+model DailyProtocol {
+  id                   String        @id @default(uuid())
+  playerId             String
+  player               PlayerProfile @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  localDate            String // YYYY-MM-DD
+  timezone             String
+  mainQuestInstanceId  String?
+  sideQuestInstanceId  String?
+  status               String // pending, in_progress, full_clear, partial_clear, recovery_clear, skipped, excused, aborted
+  totalMinutesSpent    Int           @default(0)
+  totalSpeakingMinutes Int           @default(0)
+  completedAt          DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@unique([playerId, localDate])
+  @@map("daily_protocols")
+}
+
+model LiveSessionPack {
+  id                    String        @id @default(uuid())
+  playerId              String
+  player                PlayerProfile @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  /// Denormalized active-quest link; the migration keeps this unique only for
+  /// non-retired packs so superseded historical packs remain immutable.
+  questInstanceId       String?
+  curriculumPlanId      String?
+  generatedAt           DateTime      @default(now())
+  expiresAt             DateTime
+  provider              String        @default("chatgpt-live-bridge")
+  targetMinutes         Int           @default(30)
+  targetSpeakingMinutes Int           @default(20)
+  level                 String
+  missionTitle          String
+  missionBrief          String
+  successCriteria       String[]      @default([])
+  targetLanguage        String[]      @default([])
+  knownWeaknesses       String[]      @default([])
+  persona               Json
+  phases                Json
+  adaptationBounds      Json
+  endCommand            String        @default("END CALLIOPE SESSION")
+  reportSchemaVersion   String        @default("1.0")
+  renderedPrompt        String
+  status                String        @default("issued") // issued, exported, reported, confirmed, abandoned, expired
+  exportedAt            DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  reports       ExternalSessionReport[]
+
+  @@map("live_session_packs")
+}
+
+model ExternalSessionReport {
+  id                          String          @id @default(uuid())
+  sessionPackId               String          @unique
+  sessionPack                 LiveSessionPack @relation(fields: [sessionPackId], references: [id], onDelete: Cascade)
+  playerId                    String
+  player                      PlayerProfile   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  rawText                     String
+  extractedJson               Json
+  status                      String          @default("pending_confirmation") // pending_confirmation, confirmed, rejected
+  reportConfidence            Float           @default(0.0)
+  confirmationTokenHash       String?
+  confirmationTokenExpiresAt  DateTime?
+  confirmationTokenConsumedAt DateTime?
+  confirmedAt                 DateTime?
+  confirmedBy                 String?
+  createdAt                   DateTime        @default(now())
+  updatedAt                   DateTime        @updatedAt
+
+  xpEntries     XpLedgerEntry[]
+
+  @@map("external_session_reports")
+}
+
+model XpLedgerEntry {
+  id              String                 @id @default(uuid())
+  playerId        String
+  player          PlayerProfile          @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  amount          Int
+  source          String // daily_protocol_full, daily_protocol_partial, difficulty_bonus, speaking_bonus, evidence_quality_bonus, side_quest, boss_clear, ascension_trial, recovery_repair
+  idempotencyKey  String                 @unique
+  reportId        String?
+  report          ExternalSessionReport? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  questInstanceId String?
+  createdAt       DateTime               @default(now())
+
+  @@index([playerId])
+  @@map("xp_ledger_entries")
+}
+
+model ProgressionEvent {
+  id        String        @id @default(uuid())
+  playerId  String
+  player    PlayerProfile @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  eventType String // level_up, tier_up, specialization_unlocked, reward_earned, boss_defeated, streak_repaired, recovery_seal_earned, ascension_trial_passed, daily_protocol_proposed
+  payload   Json          @default("{}")
+  createdAt DateTime      @default(now())
+
+  @@index([playerId])
+  @@map("progression_events")
+}
+
+model AgentJob {
+  id        String       @id @default(uuid())
+  task      String
+  status    String // pending, active, completed, failed, waiting_for_quota
+  params    Json         @default("{}")
+  result    Json?
+  stdout    String?
+  stderr    String?
+  exitCode  Int?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  events    AgentEvent[]
+
+  @@map("agent_jobs")
+}
+
+model AgentEvent {
+  id        String   @id @default(uuid())
+  jobId     String
+  job       AgentJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  type      String
+  message   String
+  createdAt DateTime @default(now())
+
+  @@map("agent_events")
+}
+

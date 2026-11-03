@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+credentials*
+token*
+auth.json
+*.pem
+*.key
+node_modules/
+.venv/
+demo/out/
+graphify-out/
+.pytest_cache/
+__pycache__/
+*.pyc
+.DS_Store

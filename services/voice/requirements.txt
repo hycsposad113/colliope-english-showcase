@@ -1,0 +1,2 @@
+# Extracted from a larger private codebase (CALLIOPE). Source: services/voice/requirements.txt; adapted: demonstration uses Python standard library only.
+# No runtime dependencies. pytest is installed separately in CI for test discovery.
